@@ -431,7 +431,7 @@ code {
   outline: none;
   cursor: pointer;
   padding-right: 5px;
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
 }
 
 .role-select option {
