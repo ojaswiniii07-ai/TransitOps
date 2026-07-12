@@ -431,12 +431,23 @@ code {
   outline: none;
   cursor: pointer;
   padding-right: 5px;
-  color: var(--text-primary) !important;
+  background-color: transparent !important;
+  color: #0f172a !important; /* Light mode default: dark text */
 }
 
 .role-select option {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
+  background-color: #ffffff !important; /* Light mode default: white background */
+  color: #0f172a !important; /* Light mode default: dark text */
+}
+
+/* Dark theme overrides */
+.dark-theme .role-select {
+  color: #f8fafc !important; /* Dark mode: light text */
+}
+
+.dark-theme .role-select option {
+  background-color: #11131c !important; /* Dark mode: dark background */
+  color: #f8fafc !important; /* Dark mode: light text */
 }
 
 .user-profile-badge {
