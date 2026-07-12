@@ -43,18 +43,43 @@ def get_all_vehicles():
     return vehicles
 
 
-if __name__ == "__main__":
+def update_vehicle_status(vehicle_id, new_status):
 
-    vehicles = get_all_vehicles()
+    conn = get_connection()
+    cursor = conn.cursor()
 
-    for vehicle in vehicles:
-        print("-" * 40)
-        print(f"ID: {vehicle['id']}")
-        print(f"Registration: {vehicle['registration_number']}")
-        print(f"Model: {vehicle['model']}")
-        print(f"Type: {vehicle['vehicle_type']}")
-        print(f"Capacity: {vehicle['max_load_capacity']} kg")
-        print(f"Odometer: {vehicle['odometer']} km")
-        print(f"Cost: ₹{vehicle['acquisition_cost']}")
-        print(f"Status: {vehicle['status']}")
-        print("-" * 40)
+    cursor.execute("""
+        UPDATE vehicles
+        SET status = ?
+        WHERE id = ?
+    """, (new_status, vehicle_id))
+
+    conn.commit()
+
+    if cursor.rowcount > 0:
+        print("Vehicle updated successfully!")
+    else:
+        print("Vehicle not found.")
+
+    conn.close()
+
+
+
+def delete_vehicle(vehicle_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM vehicles
+        WHERE id = ?
+    """, (vehicle_id,))
+
+    conn.commit()
+
+    if cursor.rowcount > 0:
+        print("Vehicle deleted successfully!")
+    else:
+        print("Vehicle not found.")
+
+    conn.close()
