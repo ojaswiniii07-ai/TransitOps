@@ -435,8 +435,8 @@ code {
 }
 
 .role-select option {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }
 
 .user-profile-badge {

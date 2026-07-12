@@ -5,47 +5,32 @@ import { Download } from 'lucide-react';
 export const Reports: React.FC = () => {
   const { vehicles, trips, expenses } = useApp();
 
-  // Calculation formulas:
-  // ROI = (Trip Revenue - (Maintenance + Fuel)) / Acquisition Cost
-  // Fuel Efficiency = Total Trip Distance / Total Trip Fuel Consumed
-  // Operational Cost = Total Vehicle Maintenance + Total Vehicle Fuel + Tolls
+  // Calculation per vehicle from backend data
+  const reportData = vehicles.filter(v => v.status !== 'Retired').map(v => {
+    const vCompletedTrips = trips.filter(t => t.vehicle_id === v.id && t.status === 'Completed');
+    const totalDistance = vCompletedTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
 
-  const reportData = vehicles.filter(v => !v.isDeleted).map(v => {
-    // 1. Get Completed Trips for this Vehicle
-    const vCompletedTrips = trips.filter(t => t.vehicleId === v.id && t.status === 'Completed');
-    const totalDistance = vCompletedTrips.reduce((sum, t) => sum + (t.actualDistance || t.plannedDistance || 0), 0);
-    const totalFuel = vCompletedTrips.reduce((sum, t) => sum + (t.fuelConsumed || 0), 0);
-    const totalRevenue = vCompletedTrips.reduce((sum, t) => sum + (t.revenue || 0), 0);
-
-    // 2. Get Expenses for this Vehicle
-    const vExpenses = expenses.filter(e => e.vehicleId === v.id);
-    const maintenanceCost = vExpenses.filter(e => e.expenseType === 'Maintenance').reduce((sum, e) => sum + e.cost, 0);
-    const fuelCost = vExpenses.filter(e => e.expenseType === 'Fuel').reduce((sum, e) => sum + e.cost, 0);
-    const tollCost = vExpenses.filter(e => e.expenseType === 'Toll').reduce((sum, e) => sum + e.cost, 0);
-    const otherCost = vExpenses.filter(e => e.expenseType === 'Other').reduce((sum, e) => sum + e.cost, 0);
+    const vExpenses = expenses.filter(e => e.vehicle_id === v.id);
+    const maintenanceCost = vExpenses.filter(e => e.category === 'Maintenance').reduce((sum, e) => sum + e.amount, 0);
+    const fuelCost = vExpenses.filter(e => e.category === 'Fuel').reduce((sum, e) => sum + e.amount, 0);
+    const tollCost = vExpenses.filter(e => e.category === 'Toll').reduce((sum, e) => sum + e.amount, 0);
+    const otherCost = vExpenses.filter(e => !['Fuel', 'Maintenance', 'Toll'].includes(e.category)).reduce((sum, e) => sum + e.amount, 0);
 
     const operationalCost = fuelCost + maintenanceCost + tollCost + otherCost;
-
-    // 3. ROI
-    // (Revenue - (Maintenance + Fuel)) / Acquisition Cost
+    const totalRevenue = 0; // Revenue not tracked in backend expenses
     const netReturn = totalRevenue - (maintenanceCost + fuelCost);
-    const roi = v.acquisitionCost > 0 ? (netReturn / v.acquisitionCost) * 100 : 0;
-
-    // 4. Fuel Economy (km/L)
-    const fuelEfficiency = totalFuel > 0 ? (totalDistance / totalFuel) : 0;
+    const roi = v.acquisition_cost > 0 ? (netReturn / v.acquisition_cost) * 100 : 0;
 
     return {
       vehicle: v,
       completedTripsCount: vCompletedTrips.length,
       totalDistance,
-      totalFuel,
       totalRevenue,
       operationalCost,
       maintenanceCost,
       fuelCost,
       netReturn,
-      roi: Math.round(roi * 100) / 100, // round to 2 decimals
-      fuelEfficiency: Math.round(fuelEfficiency * 10) / 10 // round to 1 decimal
+      roi: Math.round(roi * 100) / 100,
     };
   });
 
@@ -63,64 +48,33 @@ export const Reports: React.FC = () => {
   };
 
   const handleExportVehicles = () => {
-    const headers = ['VehicleID', 'Name', 'RegNumber', 'Model', 'Type', 'MaxCapacity_kg', 'Odometer_km', 'AcquisitionCost', 'Status', 'Region'];
-    const rows = vehicles.filter(v => !v.isDeleted).map(v => [
-      v.id,
-      v.name,
-      v.registrationNumber,
-      v.model,
-      v.type,
-      v.maxCapacity,
-      v.odometer,
-      v.acquisitionCost,
-      v.status,
-      v.region
+    const headers = ['ID', 'LicensePlate', 'Make', 'Model', 'Type', 'MaxCapacity_kg', 'Odometer_km', 'AcquisitionCost', 'Status', 'Region'];
+    const rows = vehicles.map(v => [
+      v.id, v.license_plate, v.make, v.model, v.vehicle_type,
+      v.max_capacity, v.odometer, v.acquisition_cost, v.status, v.region || ''
     ]);
-    
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     downloadCSV(csvContent, 'TransitOps_Fleet_Report.csv');
   };
 
   const handleExportTrips = () => {
-    const headers = ['TripID', 'Source', 'Destination', 'VehicleID', 'DriverID', 'CargoWeight_kg', 'PlannedDistance_km', 'ActualDistance_km', 'Status', 'Revenue', 'FuelConsumed_L', 'CompletionOdometer_km', 'Date', 'Region'];
+    const headers = ['ID', 'Route', 'Origin', 'Destination', 'VehicleID', 'DriverID', 'Distance_km', 'Status', 'CreatedAt'];
     const rows = trips.map(t => [
-      t.id,
-      `"${t.source}"`,
-      `"${t.destination}"`,
-      t.vehicleId,
-      t.driverId,
-      t.cargoWeight,
-      t.plannedDistance,
-      t.actualDistance || '',
-      t.status,
-      t.revenue,
-      t.fuelConsumed || '',
-      t.completionOdometer || '',
-      t.date,
-      t.region
+      t.id, `"${t.route}"`, `"${t.origin || ''}"`, `"${t.destination || ''}"`,
+      t.vehicle_id, t.driver_id, t.distance, t.status, t.created_at
     ]);
-
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     downloadCSV(csvContent, 'TransitOps_Trips_Ledger.csv');
   };
 
   const handleExportExpenses = () => {
-    const headers = ['ExpenseID', 'VehicleID', 'TripID', 'ExpenseType', 'Cost', 'Date', 'Description'];
+    const headers = ['ID', 'VehicleID', 'Category', 'Amount', 'Status', 'Date', 'Notes'];
     const rows = expenses.map(e => [
-      e.id,
-      e.vehicleId,
-      e.tripId || '',
-      e.expenseType,
-      e.cost,
-      e.date,
-      `"${e.description}"`
+      e.id, e.vehicle_id, e.category, e.amount, e.status, e.date, `"${e.notes || ''}"`
     ]);
-
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     downloadCSV(csvContent, 'TransitOps_Expenses_Ledger.csv');
   };
-
-  // isFinanceOrManager check removed since not used
 
   return (
     <div className="reports-view animate-fade-in">
@@ -146,11 +100,11 @@ export const Reports: React.FC = () => {
         </div>
       </div>
 
-      {/* Fleet ROI Matrix */}
+      {/* Fleet Cost Analysis */}
       <div className="card">
-        <h3>Asset Financial Return-on-Investment (ROI)</h3>
+        <h3>Asset Operational Cost Analysis</h3>
         <p className="text-gray-400 text-xs margin-b-15">
-          Calculated using formula: <code>(Trip Revenue - (Maintenance + Fuel)) / Acquisition Cost</code>
+          Breakdown of operational costs per vehicle from backend expense data
         </p>
 
         <table className="overview-table">
@@ -159,44 +113,29 @@ export const Reports: React.FC = () => {
               <th>Vehicle Asset</th>
               <th>Acquisition Cost</th>
               <th>Completed Trips</th>
-              <th>Total Revenue</th>
-              <th>Service & Fuel Cost</th>
-              <th>Net Operations Return</th>
-              <th>Fuel Economy</th>
-              <th>ROI Metric (%)</th>
+              <th>Total Distance</th>
+              <th>Fuel Cost</th>
+              <th>Maintenance Cost</th>
+              <th>Total Operational Cost</th>
             </tr>
           </thead>
           <tbody>
-            {reportData.map(data => {
-              const roiColor = data.roi >= 0 ? 'text-success' : 'text-danger';
-              return (
-                <tr key={data.vehicle.id}>
-                  <td>
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-white">{data.vehicle.name}</span>
-                      <code className="text-xxs text-gray-500">{data.vehicle.registrationNumber}</code>
-                    </div>
-                  </td>
-                  <td className="text-white">${data.vehicle.acquisitionCost.toLocaleString()}</td>
-                  <td className="text-center">{data.completedTripsCount}</td>
-                  <td className="text-white">${data.totalRevenue.toLocaleString()}</td>
-                  <td className="text-gray-400">${data.operationalCost.toLocaleString()}</td>
-                  <td className={`font-semibold ${data.netReturn >= 0 ? 'text-white' : 'text-danger'}`}>
-                    ${data.netReturn.toLocaleString()}
-                  </td>
-                  <td>
-                    <span className="font-bold text-white">
-                      {data.fuelEfficiency > 0 ? `${data.fuelEfficiency} km/L` : 'N/A'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`font-bold ${roiColor} text-md`}>
-                      {data.roi}%
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
+            {reportData.map(data => (
+              <tr key={data.vehicle.id}>
+                <td>
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-white">{data.vehicle.make} {data.vehicle.model}</span>
+                    <code className="text-xxs text-gray-500">{data.vehicle.license_plate}</code>
+                  </div>
+                </td>
+                <td className="text-white">${data.vehicle.acquisition_cost.toLocaleString()}</td>
+                <td className="text-center">{data.completedTripsCount}</td>
+                <td className="text-white">{data.totalDistance.toLocaleString()} km</td>
+                <td className="text-gray-400">${data.fuelCost.toLocaleString()}</td>
+                <td className="text-gray-400">${data.maintenanceCost.toLocaleString()}</td>
+                <td className="font-semibold text-warning">${data.operationalCost.toLocaleString()}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

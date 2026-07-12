@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { useApp, type Trip } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { 
   Plus, 
   Play, 
   CheckSquare, 
   Navigation, 
   MapPin, 
-  Scale, 
   Milestone,
   AlertTriangle,
-  Info
+  Info,
+  Loader2
 } from 'lucide-react';
 
 export const Trips: React.FC = () => {
@@ -18,114 +18,127 @@ export const Trips: React.FC = () => {
     vehicles, 
     drivers, 
     createTrip, 
-    dispatchTrip, 
-    completeTrip, 
-    cancelTrip,
+    updateTripStatus,
     activeRole,
-    checkLicenseValidity
+    checkLicenseValidity,
+    isLoading
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'draft' | 'dispatched' | 'completed' | 'cancelled'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'Scheduled' | 'Dispatched' | 'Completed' | 'Cancelled' | 'Delayed'>('all');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   
   // Trip completion modal
-  const [completionTripId, setCompletionTripId] = useState<string | null>(null);
-  const [finalOdometer, setFinalOdometer] = useState<number>(0);
-  const [fuelConsumed, setFuelConsumed] = useState<number>(0);
-  const [fuelCost, setFuelCost] = useState<number>(0);
-  const [actualDistance, setActualDistance] = useState<number>(0);
-  const [actualRevenue, setActualRevenue] = useState<number>(0);
+  const [completionTripId, setCompletionTripId] = useState<number | null>(null);
+  const [odometerReading, setOdometerReading] = useState<number>(0);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Create Trip states
-  const [source, setSource] = useState('');
+  const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [driverId, setDriverId] = useState('');
-  const [cargoWeight, setCargoWeight] = useState(0);
-  const [plannedDistance, setPlannedDistance] = useState(0);
+  const [distance, setDistance] = useState(0);
 
-  const handleOpenCompleteModal = (t: Trip) => {
-    const v = vehicles.find(veh => veh.id === t.vehicleId);
-    setCompletionTripId(t.id);
-    setFinalOdometer(v ? v.odometer + t.plannedDistance : t.plannedDistance);
-    setFuelConsumed(Math.round(t.plannedDistance * 0.15)); // default estimate
-    setFuelCost(Math.round(t.plannedDistance * 0.15 * 4)); // default estimate $4/L
-    setActualDistance(t.plannedDistance);
-    setActualRevenue(t.revenue);
+  const handleOpenCompleteModal = (tripId: number) => {
+    const trip = trips.find(t => t.id === tripId);
+    const v = trip ? vehicles.find(veh => veh.id === trip.vehicle_id) : null;
+    setCompletionTripId(tripId);
+    setOdometerReading(v ? v.odometer + (trip?.distance || 0) : 0);
     setValidationError(null);
   };
 
   const handleCloseForm = () => {
     setShowAddForm(false);
-    setSource('');
+    setOrigin('');
     setDestination('');
     setVehicleId('');
     setDriverId('');
-    setCargoWeight(0);
-    setPlannedDistance(0);
+    setDistance(0);
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!source || !destination || !vehicleId || !driverId || cargoWeight <= 0 || plannedDistance <= 0) {
+    if (!origin || !destination || !vehicleId || !driverId || distance <= 0) {
       alert('Please fill out all fields correctly.');
       return;
     }
 
-    createTrip({
-      source,
-      destination,
-      vehicleId,
-      driverId,
-      cargoWeight: Number(cargoWeight),
-      plannedDistance: Number(plannedDistance)
-    });
-
-    handleCloseForm();
-    setActiveTab('draft');
-  };
-
-  const handleDispatch = (id: string) => {
-    const res = dispatchTrip(id);
-    if (!res.success) {
-      alert(`Dispatch Check Failed:\n\n${res.error}`);
+    setSubmitting(true);
+    try {
+      await createTrip({
+        vehicle_id: Number(vehicleId),
+        driver_id: Number(driverId),
+        route: `${origin} to ${destination}`,
+        origin,
+        destination,
+        distance: Number(distance),
+      });
+      handleCloseForm();
+      setActiveTab('Scheduled');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create trip');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleCompleteSubmit = (e: React.FormEvent) => {
+  const handleDispatch = async (id: number) => {
+    try {
+      await updateTripStatus(id, { status: 'Dispatched' });
+    } catch (err) {
+      alert(`Dispatch Failed:\n\n${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleCompleteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!completionTripId) return;
 
-    const res = completeTrip(completionTripId, {
-      finalOdometer: Number(finalOdometer),
-      fuelConsumed: Number(fuelConsumed),
-      fuelCost: Number(fuelCost),
-      actualDistance: Number(actualDistance),
-      revenue: Number(actualRevenue)
-    });
-
-    if (!res.success) {
-      setValidationError(res.error || 'Failed to complete trip.');
-    } else {
+    setSubmitting(true);
+    try {
+      await updateTripStatus(completionTripId, {
+        status: 'Completed',
+        odometer_reading: Number(odometerReading),
+      });
       setCompletionTripId(null);
-      setActiveTab('completed');
+      setActiveTab('Completed');
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : 'Failed to complete trip.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancel = async (id: number) => {
+    try {
+      await updateTripStatus(id, { status: 'Cancelled', reason: 'Cancelled by dispatcher' });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to cancel trip');
     }
   };
 
   const filteredTrips = trips.filter(t => {
     if (activeTab === 'all') return true;
-    return t.status.toLowerCase() === activeTab;
+    return t.status === activeTab;
   });
 
   const isDispatcher = activeRole === 'Dispatcher' || activeRole === 'Fleet Manager';
 
   // Find valid vehicles and drivers for dropdowns
-  const availableVehicles = vehicles.filter(v => !v.isDeleted && v.status === 'Available');
+  const availableVehicles = vehicles.filter(v => v.status === 'Healthy' || v.status === 'Available');
   const availableDrivers = drivers.filter(d => {
-    const isLicenseValid = checkLicenseValidity(d.licenseExpiryDate) === 'Valid';
-    return !d.isDeleted && d.status === 'Available' && isLicenseValid;
+    const isLicenseValid = checkLicenseValidity(d.license_expiry) !== 'Expired';
+    return d.status === 'Active' && isLicenseValid;
   });
+
+  if (isLoading && trips.length === 0) {
+    return (
+      <div className="trips-view animate-fade-in flex align-center justify-center" style={{ minHeight: '400px' }}>
+        <Loader2 size={32} className="text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="trips-view animate-fade-in">
@@ -148,10 +161,10 @@ export const Trips: React.FC = () => {
       {/* Sub Tabs */}
       <div className="tab-menu">
         <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>All Trips</button>
-        <button className={`tab-btn ${activeTab === 'draft' ? 'active' : ''}`} onClick={() => setActiveTab('draft')}>Drafts</button>
-        <button className={`tab-btn ${activeTab === 'dispatched' ? 'active' : ''}`} onClick={() => setActiveTab('dispatched')}>Dispatched</button>
-        <button className={`tab-btn ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => setActiveTab('completed')}>Completed</button>
-        <button className={`tab-btn ${activeTab === 'cancelled' ? 'active' : ''}`} onClick={() => setActiveTab('cancelled')}>Cancelled</button>
+        <button className={`tab-btn ${activeTab === 'Scheduled' ? 'active' : ''}`} onClick={() => setActiveTab('Scheduled')}>Scheduled</button>
+        <button className={`tab-btn ${activeTab === 'Dispatched' ? 'active' : ''}`} onClick={() => setActiveTab('Dispatched')}>Dispatched</button>
+        <button className={`tab-btn ${activeTab === 'Completed' ? 'active' : ''}`} onClick={() => setActiveTab('Completed')}>Completed</button>
+        <button className={`tab-btn ${activeTab === 'Cancelled' ? 'active' : ''}`} onClick={() => setActiveTab('Cancelled')}>Cancelled</button>
       </div>
 
       {/* Create Trip Form Modal */}
@@ -164,8 +177,8 @@ export const Trips: React.FC = () => {
                 <label>Source Address</label>
                 <input 
                   type="text" 
-                  value={source} 
-                  onChange={(e) => setSource(e.target.value)} 
+                  value={origin} 
+                  onChange={(e) => setOrigin(e.target.value)} 
                   placeholder="e.g. Austin, TX"
                   required 
                 />
@@ -188,12 +201,11 @@ export const Trips: React.FC = () => {
                   <option value="">-- Choose Vehicle --</option>
                   {availableVehicles.map(v => (
                     <option key={v.id} value={v.id}>
-                      {v.name} ({v.type} - Max Cap: {v.maxCapacity}kg)
+                      {v.make} {v.model} ({v.license_plate} - Cap: {v.max_capacity}kg)
                     </option>
                   ))}
-                  {/* Fallback to show current list if empty */}
                   {availableVehicles.length === 0 && (
-                    <option disabled>No Available Vehicles (Check Registry/Maintenance)</option>
+                    <option disabled>No Available Vehicles</option>
                   )}
                 </select>
               </div>
@@ -204,32 +216,21 @@ export const Trips: React.FC = () => {
                   <option value="">-- Choose Driver --</option>
                   {availableDrivers.map(d => (
                     <option key={d.id} value={d.id}>
-                      {d.name} (Safety Rating: {d.safetyScore}%)
+                      {d.name} (Safety: {d.safety_score}%)
                     </option>
                   ))}
                   {availableDrivers.length === 0 && (
-                    <option disabled>No Available Operators (Check License Expiry/Duty Status)</option>
+                    <option disabled>No Available Operators</option>
                   )}
                 </select>
               </div>
 
-              <div className="form-group">
-                <label>Cargo Weight (kg)</label>
-                <input 
-                  type="number" 
-                  value={cargoWeight} 
-                  onChange={(e) => setCargoWeight(Number(e.target.value))} 
-                  min="1"
-                  required 
-                />
-              </div>
-
-              <div className="form-group">
+              <div className="form-group span-2">
                 <label>Estimated Distance (km)</label>
                 <input 
                   type="number" 
-                  value={plannedDistance} 
-                  onChange={(e) => setPlannedDistance(Number(e.target.value))} 
+                  value={distance} 
+                  onChange={(e) => setDistance(Number(e.target.value))} 
                   min="1"
                   required 
                 />
@@ -237,7 +238,9 @@ export const Trips: React.FC = () => {
 
               <div className="form-actions span-2">
                 <button type="button" className="btn btn-secondary" onClick={handleCloseForm}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save as Draft</button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Creating...' : 'Create Trip'}
+                </button>
               </div>
             </form>
           </div>
@@ -249,7 +252,7 @@ export const Trips: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content card animate-zoom-in" style={{ maxWidth: '500px' }}>
             <h2>Complete Dispatch Operations</h2>
-            <p className="text-gray-400 text-xs margin-b-15">Log actual trip statistics to release resources and log fuel expenses.</p>
+            <p className="text-gray-400 text-xs margin-b-15">Log final odometer reading to release resources.</p>
             
             {validationError && (
               <div className="card-alert bg-red-trans text-danger text-xxs flex align-center gap-5 margin-b-15">
@@ -259,59 +262,21 @@ export const Trips: React.FC = () => {
             )}
 
             <form onSubmit={handleCompleteSubmit} className="form-grid">
-              <div className="form-group">
+              <div className="form-group span-2">
                 <label>Final Odometer Reading (km)</label>
                 <input 
                   type="number" 
-                  value={finalOdometer} 
-                  onChange={(e) => setFinalOdometer(Number(e.target.value))} 
-                  required 
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Actual Distance Travelled (km)</label>
-                <input 
-                  type="number" 
-                  value={actualDistance} 
-                  onChange={(e) => setActualDistance(Number(e.target.value))} 
-                  required 
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Fuel Consumed (Litres)</label>
-                <input 
-                  type="number" 
-                  value={fuelConsumed} 
-                  onChange={(e) => setFuelConsumed(Number(e.target.value))} 
-                  required 
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Fuel Expense ($)</label>
-                <input 
-                  type="number" 
-                  value={fuelCost} 
-                  onChange={(e) => setFuelCost(Number(e.target.value))} 
-                  required 
-                />
-              </div>
-
-              <div className="form-group span-2">
-                <label>Final Trip Billing Revenue ($)</label>
-                <input 
-                  type="number" 
-                  value={actualRevenue} 
-                  onChange={(e) => setActualRevenue(Number(e.target.value))} 
+                  value={odometerReading} 
+                  onChange={(e) => setOdometerReading(Number(e.target.value))} 
                   required 
                 />
               </div>
 
               <div className="form-actions span-2">
                 <button type="button" className="btn btn-secondary" onClick={() => setCompletionTripId(null)}>Cancel</button>
-                <button type="submit" className="btn btn-success">Complete & Lock Trip</button>
+                <button type="submit" className="btn btn-success" disabled={submitting}>
+                  {submitting ? 'Completing...' : 'Complete & Lock Trip'}
+                </button>
               </div>
             </form>
           </div>
@@ -327,68 +292,53 @@ export const Trips: React.FC = () => {
           </div>
         ) : (
           filteredTrips.map(t => {
-            const v = vehicles.find(veh => veh.id === t.vehicleId);
-            const d = drivers.find(dr => dr.id === t.driverId);
-            const isOverloaded = v && t.cargoWeight > v.maxCapacity;
+            const v = vehicles.find(veh => veh.id === t.vehicle_id);
+            const d = drivers.find(dr => dr.id === t.driver_id);
 
             return (
               <div key={t.id} className={`trip-item card flex justify-between align-center status-border-${t.status.toLowerCase()}`}>
                 <div className="trip-summary">
                   <div className="flex align-center gap-10 margin-b-10">
                     <span className={`badge badge-${t.status.toLowerCase()}`}>{t.status}</span>
-                    <span className="text-xxs text-gray-500 font-bold uppercase">Region: {t.region} • Date: {t.date}</span>
+                    <span className="text-xxs text-gray-500 font-bold uppercase">
+                      ID: {t.id} • {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
+                    </span>
                   </div>
                   
                   <div className="route-flow flex align-center gap-10 margin-b-10">
                     <div className="flex align-center gap-5 text-white font-semibold">
                       <MapPin size={16} className="text-primary" />
-                      <span>{t.source}</span>
+                      <span>{t.origin || t.route?.split(' to ')[0] || 'N/A'}</span>
                     </div>
                     <span className="text-gray-500">➜</span>
                     <div className="flex align-center gap-5 text-white font-semibold">
                       <MapPin size={16} className="text-warning" />
-                      <span>{t.destination}</span>
+                      <span>{t.destination || t.route?.split(' to ')[1] || 'N/A'}</span>
                     </div>
                   </div>
 
                   <div className="trip-allocations flex gap-20 text-xs text-gray-400">
                     <div className="flex align-center gap-5">
                       <span>Vehicle:</span>
-                      <strong className="text-white">{v ? `${v.name} (${v.registrationNumber})` : 'Deleted Vehicle'}</strong>
+                      <strong className="text-white">{v ? `${v.make} ${v.model} (${v.license_plate})` : 'Unknown'}</strong>
                     </div>
                     <div className="flex align-center gap-5">
                       <span>Operator:</span>
-                      <strong className="text-white">{d ? d.name : 'Deleted Operator'}</strong>
+                      <strong className="text-white">{d ? d.name : 'Unknown'}</strong>
                     </div>
                   </div>
                 </div>
 
                 <div className="trip-specs flex gap-25 text-xs text-gray-300">
                   <div className="flex flex-col align-center">
-                    <span className="flex align-center gap-5 text-gray-500 text-xxs font-bold uppercase"><Scale size={12} /> Load</span>
-                    <span className={`font-semibold ${isOverloaded ? 'text-danger font-bold' : 'text-white'}`}>
-                      {t.cargoWeight.toLocaleString()} kg
-                    </span>
-                    {v && <span className="text-xxs text-gray-500">Max: {v.maxCapacity}kg</span>}
-                  </div>
-
-                  <div className="flex flex-col align-center">
                     <span className="flex align-center gap-5 text-gray-500 text-xxs font-bold uppercase"><Milestone size={12} /> Distance</span>
-                    <span className="font-semibold text-white">
-                      {t.actualDistance ? t.actualDistance : t.plannedDistance} km
-                    </span>
-                    {t.actualDistance && <span className="text-xxs text-gray-500">Planned: {t.plannedDistance}km</span>}
-                  </div>
-
-                  <div className="flex flex-col align-center">
-                    <span className="text-gray-500 text-xxs font-bold uppercase">Estimated Revenue</span>
-                    <span className="font-semibold text-success">${t.revenue.toLocaleString()}</span>
+                    <span className="font-semibold text-white">{t.distance} km</span>
                   </div>
                 </div>
 
                 {isDispatcher && (
                   <div className="trip-actions flex gap-10">
-                    {t.status === 'Draft' && (
+                    {t.status === 'Scheduled' && (
                       <>
                         <button 
                           className="btn btn-primary flex align-center gap-5 text-xs padding-x-10 padding-y-5"
@@ -399,9 +349,7 @@ export const Trips: React.FC = () => {
                         <button 
                           className="btn btn-danger flex align-center gap-5 text-xs padding-x-10 padding-y-5"
                           onClick={() => {
-                            if (confirm('Cancel this dispatch draft?')) {
-                              cancelTrip(t.id);
-                            }
+                            if (confirm('Cancel this trip?')) handleCancel(t.id);
                           }}
                         >
                           Cancel
@@ -413,16 +361,14 @@ export const Trips: React.FC = () => {
                       <>
                         <button 
                           className="btn btn-success flex align-center gap-5 text-xs padding-x-10 padding-y-5"
-                          onClick={() => handleOpenCompleteModal(t)}
+                          onClick={() => handleOpenCompleteModal(t.id)}
                         >
                           <CheckSquare size={12} /> Complete
                         </button>
                         <button 
                           className="btn btn-danger flex align-center gap-5 text-xs padding-x-10 padding-y-5"
                           onClick={() => {
-                            if (confirm('Abort and cancel this active dispatch? Vehicle & driver statuses will reset.')) {
-                              cancelTrip(t.id);
-                            }
+                            if (confirm('Abort and cancel this active dispatch?')) handleCancel(t.id);
                           }}
                         >
                           Cancel
@@ -432,7 +378,7 @@ export const Trips: React.FC = () => {
                     
                     {t.status === 'Completed' && (
                       <div className="text-xxs text-gray-500 italic flex align-center gap-5">
-                        <Info size={12} /> Completed Odo: {t.completionOdometer} km
+                        <Info size={12} /> Completed
                       </div>
                     )}
 

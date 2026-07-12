@@ -31,13 +31,15 @@ def init_db():
                     license_plate="NY-1234", make="Ford", model="Transit Van", 
                     vehicle_type="Van", odometer=25000.0, last_service_odometer=24000.0, 
                     status="Healthy", insurance_expiry=datetime.date.today() + datetime.timedelta(days=45),
-                    fitness_expiry=datetime.date.today() + datetime.timedelta(days=120)
+                    fitness_expiry=datetime.date.today() + datetime.timedelta(days=120),
+                    max_capacity=500.0, acquisition_cost=32000.0, region="North",
                 ),
                 Vehicle(
                     license_plate="CA-5678", make="Volvo", model="VNL Truck", 
                     vehicle_type="Truck", odometer=80000.0, last_service_odometer=70000.0, 
-                    status="Healthy", insurance_expiry=datetime.date.today() + datetime.timedelta(days=10), # Alert category (within 15 days)
-                    fitness_expiry=datetime.date.today() + datetime.timedelta(days=5) # Alert category (within 7 days)
+                    status="Healthy", insurance_expiry=datetime.date.today() + datetime.timedelta(days=10),
+                    fitness_expiry=datetime.date.today() + datetime.timedelta(days=5),
+                    max_capacity=5000.0, acquisition_cost=89000.0, region="South",
                 ),
             ]
             db.add_all(vehicles)
@@ -46,17 +48,23 @@ def init_db():
             drivers = [
                 Driver(
                     name="John Doe", license_number="DL-998877", 
-                    license_expiry=datetime.date.today() + datetime.timedelta(days=12), # Alert category (within 15 days)
+                    license_category="Class A CDL",
+                    license_expiry=datetime.date.today() + datetime.timedelta(days=12),
+                    safety_score=96.0,
                     status="Active"
                 ),
                 Driver(
                     name="Jane Smith", license_number="DL-112233", 
-                    license_expiry=datetime.date.today() + datetime.timedelta(days=2), # Alert category (within 7 days)
+                    license_category="Class B CDL",
+                    license_expiry=datetime.date.today() + datetime.timedelta(days=2),
+                    safety_score=89.0,
                     status="Active"
                 ),
                 Driver(
                     name="Bob Johnson", license_number="DL-445566", 
-                    license_expiry=datetime.date.today() - datetime.timedelta(days=1), # Expired / Suspended
+                    license_category="Class A CDL",
+                    license_expiry=datetime.date.today() - datetime.timedelta(days=1),
+                    safety_score=42.0,
                     status="Suspended"
                 ),
             ]

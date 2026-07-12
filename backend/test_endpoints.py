@@ -8,33 +8,33 @@ from app.main import app
 
 
 def main() -> None:
-    client = TestClient(app)
+    with TestClient(app) as client:
+        checks = [
+            ("GET", "/dashboard/kpis"),
+            ("GET", "/expenses/"),
+            ("GET", "/trips/"),
+            ("GET", "/notifications/"),
+            ("GET", "/audit-logs/"),
+            ("GET", "/maintenance/schedule"),
+            ("GET", "/approvals/"),
+        ]
 
-    checks = [
-        ("GET", "/dashboard/kpis"),
-        ("GET", "/expenses/"),
-        ("GET", "/trips/"),
-        ("GET", "/notifications/"),
-        ("GET", "/audit-logs/"),
-        ("GET", "/maintenance/schedule"),
-        ("GET", "/approvals/"),
-    ]
+        print("\n=== TransitOps API Smoke Test ===\n")
+        all_ok = True
+        for method, path in checks:
+            res = client.request(method, path)
+            status = "✅" if res.status_code == 200 else "❌"
+            print(f"{status}  {method} {path}  →  {res.status_code}")
+            if res.status_code != 200:
+                all_ok = False
+                print(f"    Response: {res.text[:200]}")
 
-    print("\n=== TransitOps API Smoke Test ===\n")
-    all_ok = True
-    for method, path in checks:
-        res = client.request(method, path)
-        status = "✅" if res.status_code == 200 else "❌"
-        print(f"{status}  {method} {path}  →  {res.status_code}")
-        if res.status_code != 200:
-            all_ok = False
-            print(f"    Response: {res.text[:200]}")
+        print()
+        if all_ok:
+            print("All endpoints OK.")
+        else:
+            print("Some endpoints failed — see above.")
 
-    print()
-    if all_ok:
-        print("All endpoints OK.")
-    else:
-        print("Some endpoints failed — see above.")
 
 
 if __name__ == "__main__":

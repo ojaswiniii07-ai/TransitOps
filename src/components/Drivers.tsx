@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useApp, type Driver } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
+import type { DriverAPI } from '../api';
 import { 
   Plus, 
   Edit3, 
@@ -10,7 +11,8 @@ import {
   AlertCircle,
   Contact,
   ShieldCheck,
-  Shield
+  Shield,
+  Loader2
 } from 'lucide-react';
 
 export const Drivers: React.FC = () => {
@@ -18,14 +20,18 @@ export const Drivers: React.FC = () => {
     drivers, 
     addDriver, 
     updateDriver, 
-    deleteDriver, 
+    deleteDriver,
+    suspendDriver,
+    activateDriver,
     activeRole,
-    checkLicenseValidity
+    checkLicenseValidity,
+    isLoading
   } = useApp();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState('');
+  const [editId, setEditId] = useState<number>(0);
+  const [submitting, setSubmitting] = useState(false);
 
   // Driver Form States
   const [name, setName] = useState('');
@@ -35,16 +41,16 @@ export const Drivers: React.FC = () => {
   const [contactNumber, setContactNumber] = useState('');
 
   // Score modal state
-  const [showScoreModal, setShowScoreModal] = useState<string | null>(null); // driverId
+  const [showScoreModal, setShowScoreModal] = useState<number | null>(null);
   const [newScore, setNewScore] = useState<number>(90);
 
-  const handleOpenEdit = (d: Driver) => {
+  const handleOpenEdit = (d: DriverAPI) => {
     setEditId(d.id);
     setName(d.name);
-    setLicenseNumber(d.licenseNumber);
-    setLicenseCategory(d.licenseCategory);
-    setLicenseExpiryDate(d.licenseExpiryDate);
-    setContactNumber(d.contactNumber);
+    setLicenseNumber(d.license_number);
+    setLicenseCategory(d.license_category || 'Class A CDL');
+    setLicenseExpiryDate(d.license_expiry);
+    setContactNumber(d.phone || '');
     setIsEditing(true);
     setShowAddForm(true);
   };
@@ -52,7 +58,6 @@ export const Drivers: React.FC = () => {
   const handleCloseForm = () => {
     setShowAddForm(false);
     setIsEditing(false);
-    // Reset forms
     setName('');
     setLicenseNumber('');
     setLicenseCategory('Class A CDL');
@@ -60,53 +65,64 @@ export const Drivers: React.FC = () => {
     setContactNumber('');
   };
 
-  const handleSubmitDriver = (e: React.FormEvent) => {
+  const handleSubmitDriver = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !licenseNumber || !licenseExpiryDate || !contactNumber) {
-      alert('Please fill out all fields.');
+    if (!name || !licenseNumber || !licenseExpiryDate) {
+      alert('Please fill out all required fields.');
       return;
     }
 
-    if (isEditing) {
-      updateDriver(editId, {
-        name,
-        licenseNumber,
-        licenseCategory,
-        licenseExpiryDate,
-        contactNumber
-      });
-    } else {
-      addDriver({
-        name,
-        licenseNumber,
-        licenseCategory,
-        licenseExpiryDate,
-        contactNumber
-      });
+    setSubmitting(true);
+    try {
+      if (isEditing) {
+        await updateDriver(editId, {
+          name,
+          license_number: licenseNumber,
+          license_category: licenseCategory,
+          license_expiry: licenseExpiryDate,
+          phone: contactNumber || undefined,
+        });
+      } else {
+        await addDriver({
+          name,
+          license_number: licenseNumber,
+          license_category: licenseCategory,
+          license_expiry: licenseExpiryDate,
+          phone: contactNumber || undefined,
+        });
+      }
+      handleCloseForm();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Operation failed');
+    } finally {
+      setSubmitting(false);
     }
-
-    handleCloseForm();
   };
 
-  const handleUpdateScore = (driverId: string) => {
+  const handleUpdateScore = async (driverId: number) => {
     if (newScore < 0 || newScore > 100) {
       alert('Safety score must be between 0 and 100.');
       return;
     }
     
-    // Automatically suspend if score falls below 50, alert user
-    const shouldSuspend = newScore < 50;
-    
-    updateDriver(driverId, { 
-      safetyScore: newScore,
-      status: shouldSuspend ? 'Suspended' : undefined
-    });
-    
-    setShowScoreModal(null);
+    try {
+      await updateDriver(driverId, { safety_score: newScore });
+      setShowScoreModal(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update score');
+    }
   };
 
   const isSafetyOfficer = activeRole === 'Safety Officer' || activeRole === 'Fleet Manager';
   const isFleetManager = activeRole === 'Fleet Manager';
+
+  if (isLoading && drivers.length === 0) {
+    return (
+      <div className="drivers-view animate-fade-in flex align-center justify-center" style={{ minHeight: '400px' }}>
+        <Loader2 size={32} className="text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="drivers-view animate-fade-in">
@@ -181,13 +197,14 @@ export const Drivers: React.FC = () => {
                   value={contactNumber} 
                   onChange={(e) => setContactNumber(e.target.value)} 
                   placeholder="e.g. +1-555-0192"
-                  required 
                 />
               </div>
 
               <div className="form-actions span-2">
                 <button type="button" className="btn btn-secondary" onClick={handleCloseForm}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{isEditing ? 'Save Changes' : 'Register Operator'}</button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Register Operator'}
+                </button>
               </div>
             </form>
           </div>
@@ -195,7 +212,7 @@ export const Drivers: React.FC = () => {
       )}
 
       {/* Safety Rating Modal */}
-      {showScoreModal && (
+      {showScoreModal !== null && (
         <div className="modal-overlay">
           <div className="modal-content card animate-zoom-in" style={{ maxWidth: '400px' }}>
             <h2>Update Safety Rating</h2>
@@ -240,9 +257,9 @@ export const Drivers: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {drivers.filter(d => !d.isDeleted).map(d => {
-              const validity = checkLicenseValidity(d.licenseExpiryDate);
-              const scoreColor = d.safetyScore >= 85 ? 'text-success' : d.safetyScore >= 70 ? 'text-warning' : 'text-danger';
+            {drivers.map(d => {
+              const validity = checkLicenseValidity(d.license_expiry);
+              const scoreColor = d.safety_score >= 85 ? 'text-success' : d.safety_score >= 70 ? 'text-warning' : 'text-danger';
               
               return (
                 <tr key={d.id}>
@@ -255,18 +272,18 @@ export const Drivers: React.FC = () => {
                   <td>
                     <span className="flex align-center gap-5 text-gray-300">
                       <Contact size={14} className="text-gray-500" />
-                      {d.contactNumber}
+                      {d.phone || 'N/A'}
                     </span>
                   </td>
                   <td>
                     <div className="flex flex-col">
-                      <span className="text-white text-xs">{d.licenseCategory}</span>
-                      <code className="text-xxs text-gray-500">{d.licenseNumber}</code>
+                      <span className="text-white text-xs">{d.license_category || 'N/A'}</span>
+                      <code className="text-xxs text-gray-500">{d.license_number}</code>
                     </div>
                   </td>
                   <td>
                     <div className="flex flex-col gap-2">
-                      <span className="text-xs text-white">{d.licenseExpiryDate}</span>
+                      <span className="text-xs text-white">{d.license_expiry}</span>
                       {validity === 'Expired' && (
                         <span className="badge badge-retired flex align-center gap-2 text-xxs padding-x-5 padding-y-2">
                           <AlertTriangle size={10} /> Expired
@@ -287,8 +304,8 @@ export const Drivers: React.FC = () => {
                   <td>
                     <div className="flex align-center gap-5 font-bold">
                       <Shield size={14} className={scoreColor} />
-                      <span className={`${scoreColor} text-sm`}>{d.safetyScore}%</span>
-                      {d.safetyScore < 70 && (
+                      <span className={`${scoreColor} text-sm`}>{d.safety_score}%</span>
+                      {d.safety_score < 70 && (
                         <span title="Safety warning: Below threshold!">
                           <ShieldAlert size={14} className="text-danger" />
                         </span>
@@ -307,7 +324,7 @@ export const Drivers: React.FC = () => {
                           <button 
                             className="btn btn-secondary text-xxs padding-x-10 padding-y-5"
                             onClick={() => {
-                              setNewScore(d.safetyScore);
+                              setNewScore(d.safety_score);
                               setShowScoreModal(d.id);
                             }}
                             title="Audit Safety Score"
@@ -318,12 +335,12 @@ export const Drivers: React.FC = () => {
                           {d.status === 'Suspended' ? (
                             <button 
                               className="btn btn-success text-xxs padding-x-10 padding-y-5 flex align-center gap-2"
-                              onClick={() => {
-                                if (d.safetyScore < 50) {
-                                  alert('Cannot activate. Safety score is below threshold (50). Please audit score first.');
-                                  return;
+                              onClick={async () => {
+                                try {
+                                  await activateDriver(d.id);
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : 'Failed to activate');
                                 }
-                                updateDriver(d.id, { status: 'Available' });
                               }}
                             >
                               <ShieldCheck size={12} /> Activate
@@ -331,9 +348,13 @@ export const Drivers: React.FC = () => {
                           ) : (
                             <button 
                               className="btn btn-danger text-xxs padding-x-10 padding-y-5 flex align-center gap-2"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (confirm(`Are you sure you want to suspend ${d.name}?`)) {
-                                  updateDriver(d.id, { status: 'Suspended' });
+                                  try {
+                                    await suspendDriver(d.id);
+                                  } catch (err) {
+                                    alert(err instanceof Error ? err.message : 'Failed to suspend');
+                                  }
                                 }
                               }}
                               disabled={d.status === 'On Trip'}
@@ -356,9 +377,13 @@ export const Drivers: React.FC = () => {
                           </button>
                           <button 
                             className="btn btn-icon text-gray-400 hover:text-red-500"
-                            onClick={() => {
+                            onClick={async () => {
                               if (confirm(`Remove operator ${d.name} from records?`)) {
-                                deleteDriver(d.id);
+                                try {
+                                  await deleteDriver(d.id);
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : 'Failed to delete');
+                                }
                               }
                             }}
                             disabled={d.status === 'On Trip'}

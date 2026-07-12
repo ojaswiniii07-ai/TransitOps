@@ -99,7 +99,7 @@ function App() {
               <select 
                 value={activeRole} 
                 onChange={(e) => setActiveRole(e.target.value as Role)}
-                className="role-select font-semibold text-white bg-transparent"
+                className="role-select font-semibold bg-transparent"
               >
                 <option value="Fleet Manager">Fleet Manager (All Controls)</option>
                 <option value="Dispatcher">Dispatcher (Scheduling)</option>
@@ -123,7 +123,7 @@ function App() {
                 <User size={14} className="text-gray-300" />
               </div>
               <div className="user-meta text-left">
-                <span className="user-name font-semibold text-white block">{currentUser.name}</span>
+                <span className="user-name font-semibold block">{currentUser.name}</span>
                 <span className="user-email text-xxs text-gray-500 block">{currentUser.email}</span>
               </div>
               

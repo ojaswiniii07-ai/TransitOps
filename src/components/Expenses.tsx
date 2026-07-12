@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import { useApp, type ExpenseType } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { 
   Plus, 
   Filter, 
   Calendar, 
   TrendingUp, 
-  Truck
+  Truck,
+  Loader2,
+  Trash2
 } from 'lucide-react';
 
 export const Expenses: React.FC = () => {
-  const { expenses, vehicles, addExpense, activeRole } = useApp();
+  const { expenses, vehicles, addExpense, deleteExpense, activeRole, isLoading } = useApp();
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   
   // Ledger Filters
   const [filterVehicle, setFilterVehicle] = useState('all');
@@ -19,44 +22,55 @@ export const Expenses: React.FC = () => {
 
   // Form states
   const [vehicleId, setVehicleId] = useState('');
-  const [expenseType, setExpenseType] = useState<ExpenseType>('Toll');
-  const [cost, setCost] = useState(0);
-  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('Toll');
+  const [amount, setAmount] = useState(0);
+  const [notes, setNotes] = useState('');
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vehicleId || cost <= 0 || !description) {
+    if (!vehicleId || amount <= 0 || !notes) {
       alert('Please fill out all fields correctly.');
       return;
     }
 
-    addExpense({
-      vehicleId,
-      expenseType,
-      cost: Number(cost),
-      description
-    });
+    setSubmitting(true);
+    try {
+      await addExpense({
+        vehicle_id: Number(vehicleId),
+        category,
+        amount: Number(amount),
+        notes,
+      });
 
-    setShowAddForm(false);
-    // Reset forms
-    setVehicleId('');
-    setExpenseType('Toll');
-    setCost(0);
-    setDescription('');
+      setShowAddForm(false);
+      setVehicleId('');
+      setCategory('Toll');
+      setAmount(0);
+      setNotes('');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create expense');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const filteredExpenses = expenses.filter(exp => {
-    const matchVehicle = filterVehicle === 'all' || exp.vehicleId === filterVehicle;
-    const matchType = filterType === 'all' || exp.expenseType.toLowerCase() === filterType.toLowerCase();
+    const matchVehicle = filterVehicle === 'all' || String(exp.vehicle_id) === filterVehicle;
+    const matchType = filterType === 'all' || exp.category.toLowerCase() === filterType.toLowerCase();
     return matchVehicle && matchType;
   });
 
-  const totalFilteredCost = filteredExpenses.reduce((sum, exp) => sum + exp.cost, 0);
+  const totalFilteredCost = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   const isFleetManager = activeRole === 'Fleet Manager';
 
-  // Group vehicles for filter dropdown
-  const expenseVehicles = vehicles.filter(v => !v.isDeleted);
+  if (isLoading && expenses.length === 0) {
+    return (
+      <div className="expenses-view animate-fade-in flex align-center justify-center" style={{ minHeight: '400px' }}>
+        <Loader2 size={32} className="text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="expenses-view animate-fade-in">
@@ -71,7 +85,7 @@ export const Expenses: React.FC = () => {
             className="btn btn-primary flex align-center gap-5" 
             onClick={() => setShowAddForm(true)}
           >
-            <Plus size={16} /> Log Expense Receipts
+            <Plus size={16} /> Log Expense
           </button>
         )}
       </div>
@@ -103,7 +117,7 @@ export const Expenses: React.FC = () => {
               <label className="text-xxs text-gray-500">Asset Vehicle</label>
               <select value={filterVehicle} onChange={(e) => setFilterVehicle(e.target.value)} className="padding-y-5 text-xs">
                 <option value="all">All Vehicles</option>
-                {expenseVehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.registrationNumber})</option>)}
+                {vehicles.map(v => <option key={v.id} value={v.id}>{v.make} {v.model} ({v.license_plate})</option>)}
               </select>
             </div>
             <div className="filter-group flex-grow">
@@ -113,14 +127,14 @@ export const Expenses: React.FC = () => {
                 <option value="Fuel">Fuel Logs</option>
                 <option value="Maintenance">Maintenance Service</option>
                 <option value="Toll">Road Tolls</option>
-                <option value="Other">Other Expenses</option>
+                <option value="Miscellaneous">Other</option>
               </select>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Log Expense Receipt Modal */}
+      {/* Log Expense Modal */}
       {showAddForm && (
         <div className="modal-overlay">
           <div className="modal-content card animate-zoom-in" style={{ maxWidth: '450px' }}>
@@ -130,49 +144,51 @@ export const Expenses: React.FC = () => {
                 <label>Select Fleet Vehicle</label>
                 <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} required>
                   <option value="">-- Choose Vehicle --</option>
-                  {expenseVehicles.map(v => (
+                  {vehicles.map(v => (
                     <option key={v.id} value={v.id}>
-                      {v.name} ({v.registrationNumber})
+                      {v.make} {v.model} ({v.license_plate})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="form-group">
-                <label>Expense Type</label>
-                <select value={expenseType} onChange={(e) => setExpenseType(e.target.value as any)}>
+                <label>Expense Category</label>
+                <select value={category} onChange={(e) => setCategory(e.target.value)}>
                   <option value="Toll">Toll Fees</option>
                   <option value="Fuel">Fuel Refill</option>
                   <option value="Maintenance">Service Maintenance</option>
-                  <option value="Other">Other Miscellaneous</option>
+                  <option value="Miscellaneous">Other Miscellaneous</option>
                 </select>
               </div>
 
               <div className="form-group span-2">
-                <label>Cost Amount ($)</label>
+                <label>Amount ($)</label>
                 <input 
                   type="number" 
-                  value={cost} 
-                  onChange={(e) => setCost(Number(e.target.value))} 
+                  value={amount} 
+                  onChange={(e) => setAmount(Number(e.target.value))} 
                   min="1"
                   required 
                 />
               </div>
 
               <div className="form-group span-2">
-                <label>Receipt Description</label>
+                <label>Description</label>
                 <input 
                   type="text" 
-                  value={description} 
-                  onChange={(e) => setDescription(e.target.value)} 
-                  placeholder="e.g. State route toll gates / independent oil purchase"
+                  value={notes} 
+                  onChange={(e) => setNotes(e.target.value)} 
+                  placeholder="e.g. State route toll gates"
                   required 
                 />
               </div>
 
               <div className="form-actions span-2">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">File Expense</button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Filing...' : 'File Expense'}
+                </button>
               </div>
             </form>
           </div>
@@ -187,19 +203,21 @@ export const Expenses: React.FC = () => {
             <tr>
               <th>Date</th>
               <th>Vehicle Asset</th>
-              <th>Type Class</th>
-              <th>Billing Cost</th>
-              <th>Description Receipt Details</th>
+              <th>Category</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Description</th>
+              {isFleetManager && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {filteredExpenses.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center text-gray-500 padding-y-20">No expense logs match criteria.</td>
+                <td colSpan={isFleetManager ? 7 : 6} className="text-center text-gray-500 padding-y-20">No expense logs match criteria.</td>
               </tr>
             ) : (
               filteredExpenses.map(exp => {
-                const v = vehicles.find(veh => veh.id === exp.vehicleId);
+                const v = vehicles.find(veh => veh.id === exp.vehicle_id);
                 
                 return (
                   <tr key={exp.id}>
@@ -212,24 +230,45 @@ export const Expenses: React.FC = () => {
                     <td>
                       <span className="flex align-center gap-5 font-semibold text-white">
                         <Truck size={14} className="text-gray-500" />
-                        {v ? v.name : 'Deleted Vehicle'}
-                        <code className="text-xxs text-gray-500">({v ? v.registrationNumber : 'N/A'})</code>
+                        {v ? `${v.make} ${v.model}` : 'Unknown'}
+                        <code className="text-xxs text-gray-500">({v ? v.license_plate : 'N/A'})</code>
                       </span>
                     </td>
                     <td>
-                      <span className={`badge badge-${exp.expenseType.toLowerCase()}`}>
-                        {exp.expenseType}
+                      <span className={`badge badge-${exp.category.toLowerCase()}`}>
+                        {exp.category}
                       </span>
                     </td>
                     <td className="font-bold text-white">
-                      ${exp.cost.toLocaleString()}
+                      ${exp.amount.toLocaleString()}
+                    </td>
+                    <td>
+                      <span className={`badge badge-${exp.status.toLowerCase()}`}>
+                        {exp.status}
+                      </span>
                     </td>
                     <td className="text-xs text-gray-300">
-                      {exp.description}
-                      {exp.tripId && (
-                        <span className="block text-xxs text-gray-500 italic">Linked Trip ID: <code>{exp.tripId}</code></span>
-                      )}
+                      {exp.notes || ''}
                     </td>
+                    {isFleetManager && (
+                      <td>
+                        <button 
+                          className="btn btn-icon text-gray-400 hover:text-red-500"
+                          onClick={async () => {
+                            if (confirm('Delete this expense?')) {
+                              try {
+                                await deleteExpense(exp.id);
+                              } catch (err) {
+                                alert(err instanceof Error ? err.message : 'Failed to delete');
+                              }
+                            }
+                          }}
+                          title="Delete expense"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })

@@ -21,6 +21,8 @@ from app.routers import (
     trips,
     expenses,
     dashboard,
+    vehicles,
+    drivers,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -86,6 +88,8 @@ app.add_middleware(
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
 app.include_router(dashboard.router)
+app.include_router(vehicles.router)
+app.include_router(drivers.router)
 app.include_router(notifications.router)
 app.include_router(audit.router)
 app.include_router(documents.router)
