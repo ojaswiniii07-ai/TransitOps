@@ -1,0 +1,326 @@
+TransitOps Backend Extension PRD
+Version 1.1
+Additional Backend Features
+1. Notification & Alert Engine
+Objective
+
+Automatically notify users when important operational events occur, eliminating the need for manual monitoring.
+
+Trigger Events
+Driver
+License expires within:
+30 days
+15 days
+7 days
+Today
+Vehicle
+Insurance expiry
+Fitness certificate expiry
+Maintenance due
+Trips
+Trip delayed
+Trip cancelled
+Expenses
+Expense exceeds predefined threshold
+User Stories
+Fleet Manager
+Receive maintenance reminders
+Receive vehicle document expiry alerts
+Safety Officer
+Receive driver license expiry alerts
+Dispatcher
+Receive delayed trip notifications
+Functional Requirements
+Notification Generation
+
+System automatically creates notifications when trigger conditions are met.
+
+Fields
+
+Notification ID
+User ID
+Title
+Description
+Notification Type
+Priority
+Status
+Created At
+Read At
+
+Status
+
+Unread
+Read
+Archived
+
+Priority
+
+Low
+Medium
+High
+Critical
+Backend APIs
+GET /notifications
+
+Returns notifications for logged-in user
+PATCH /notifications/{id}/read
+PATCH /notifications/read-all
+DELETE /notifications/{id}
+Business Rules
+Notifications are role-specific.
+Duplicate notifications should not be generated.
+Expired notifications should archive automatically after 30 days.
+2. Audit Log System
+Objective
+
+Maintain complete history of every important system action for accountability.
+
+Tracked Actions
+
+Vehicle
+
+Created
+Updated
+Deleted
+Retired
+
+Driver
+
+Added
+Updated
+Suspended
+
+Trips
+
+Created
+Dispatched
+Completed
+Cancelled
+
+Maintenance
+
+Created
+Closed
+
+Expenses
+
+Added
+Edited
+Deleted
+Database Fields
+Audit ID
+User ID
+Entity Type
+Entity ID
+Action
+Old Value
+New Value
+Timestamp
+IP Address
+Backend APIs
+GET /audit-logs
+
+Supports filtering
+
+Filters
+
+User
+Action
+Entity
+Date Range
+Business Rules
+Audit logs cannot be edited.
+Only administrators can delete audit logs.
+Every update must create one audit entry.
+3. Document Management Module
+Objective
+
+Store and manage all vehicle and driver documents digitally.
+
+Vehicle Documents
+RC
+Insurance
+Pollution Certificate
+Fitness Certificate
+
+Driver Documents
+
+Driving License
+Medical Certificate
+Identity Proof
+Database
+Documents
+Document ID
+Owner Type
+Owner ID
+Document Type
+File URL
+Issue Date
+Expiry Date
+Uploaded By
+Uploaded At
+Status
+Functional Requirements
+
+Users can
+
+Upload documents
+Replace documents
+View documents
+Delete documents
+
+System
+
+Stores document securely
+Tracks expiry dates
+Generates alerts
+Backend APIs
+POST /documents/upload
+GET /documents/{ownerId}
+DELETE /documents/{documentId}
+Business Rules
+Only PDF, JPG and PNG allowed.
+Maximum file size: 10 MB.
+Every vehicle may have multiple documents.
+4. Approval Workflow Engine
+Objective
+
+Require managerial approval for sensitive operations.
+
+Approval Required For
+
+Vehicle Retirement
+
+Driver Suspension
+
+Maintenance Cost above threshold
+
+Expense greater than threshold
+
+Vehicle Purchase
+
+Workflow
+Create Request
+
+↓
+
+Pending Approval
+
+↓
+
+Approved
+or
+Rejected
+Database
+Approval ID
+Request Type
+Entity ID
+Requested By
+Approver
+Status
+Comments
+Created At
+Updated At
+Backend APIs
+POST /approvals
+GET /approvals/pending
+PATCH /approvals/{id}/approve
+PATCH /approvals/{id}/reject
+Business Rules
+Only authorized roles may approve.
+Rejected requests cannot modify data.
+Approved requests execute automatically.
+5. Predictive Maintenance Scheduler
+Objective
+
+Automatically determine when a vehicle should undergo maintenance.
+
+Inputs
+
+Current Odometer
+
+Previous Maintenance Date
+
+Maintenance Interval
+
+Vehicle Type
+
+Average Distance Travelled
+
+System Logic
+
+If
+
+Current Odometer
+>=
+
+Last Service Odometer
+
++
+
+Maintenance Interval
+
+Then
+
+Maintenance Due
+Maintenance Status
+Healthy
+
+Upcoming
+
+Overdue
+Database
+Schedule ID
+Vehicle ID
+Next Service Date
+Next Service Odometer
+Current Status
+Last Updated
+Backend APIs
+GET /maintenance/schedule
+GET /maintenance/upcoming
+POST /maintenance/recalculate
+Business Rules
+Schedule recalculates after every completed trip.
+Vehicles marked "Overdue" cannot be dispatched (configurable).
+Dashboard updates automatically.
+Integration with Existing Modules
+Existing Module	New Backend Feature
+Vehicle Registry	Document Management, Predictive Maintenance
+Driver Management	Notifications, Document Management
+Trip Management	Audit Logs, Notifications
+Maintenance	Approval Workflow, Predictive Maintenance
+Fuel & Expenses	Approval Workflow, Audit Logs
+Dashboard	Notifications, Predictive Maintenance KPIs
+Authentication & RBAC	Role-based Notification and Approval Access
+New Database Tables
+Table	Purpose
+Notifications	Stores system alerts
+AuditLogs	Tracks all user actions
+Documents	Vehicle and driver document storage
+Approvals	Approval requests and decisions
+MaintenanceSchedules	Predictive maintenance records
+Frontend Integration Notes
+
+Each feature is designed as a self-contained module with REST APIs, making it easy to integrate into your existing frontend:
+
+Notifications: Add a notification bell with unread count and a notifications page.
+Audit Logs: Add an "Activity History" page with filters.
+Document Management: Add a "Documents" tab on Vehicle and Driver detail pages for upload and viewing.
+Approval Workflow: Add a "Pending Approvals" dashboard for authorized managers with Approve/Reject actions.
+Predictive Maintenance: Add maintenance status badges, upcoming service lists, and dashboard widgets.
+
+These five modules fit directly into the current TransitOps architecture without requiring major changes to the existing Vehicle, Driver, Trip, Maintenance, and Dashboard screens, making them ideal additions for both development and demonstration.
+
+For TransitOps, both stacks are excellent. If this is a college project or hackathon and you're comfortable with Python, I'd recommend:
+
+Frontend: React + Vite + TypeScript
+Backend: FastAPI
+Database: PostgreSQL
+ORM: SQLAlchemy + Alembic
+Authentication: JWT
+Documentation: Built-in Swagger/OpenAPI
+Background Tasks: APScheduler
+Storage: Supabase Storage or local storage during development
+
+This combination integrates smoothly with a React frontend and gives you room to add advanced analytics or AI features later without changing your backend technology.
