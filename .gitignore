@@ -1,16 +1,27 @@
-# Byte-compiled / optimized / DLL files
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node / Frontend
+node_modules
+dist
+dist-ssr
+*.local
+
+# Python / Backend
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Virtual environments
 .venv/
 venv/
 ENV/
 env/
-
-# Pytest / testing
 .pytest_cache/
 .coverage
 htmlcov/
@@ -24,9 +35,14 @@ backend/transitops.db
 backend/uploads/
 uploads/
 
-# IDE files
-.idea/
+# IDE / Editor directories and files
 .vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # OS files
 .DS_Store
